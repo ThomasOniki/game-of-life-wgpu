@@ -4,6 +4,7 @@ struct App {
     device: wgpu::Device,
     queue: wgpu::Queue,
     render_pipeline: wgpu::RenderPipeline,
+    window: Option<std::sync::Arc<winit::window::Window>>,
 }
 
 impl App {
@@ -20,7 +21,15 @@ impl App {
             device: device,
             queue: queue,
             render_pipeline: render_pipeline,
+            window: None,
         }
+    }
+
+    fn run(&mut self) {
+        winit::event_loop::EventLoop::new()
+            .unwrap()
+            .run_app(self)
+            .unwrap();
     }
 
     fn create_instance() -> wgpu::Instance {
@@ -111,7 +120,28 @@ impl App {
     }
 }
 
+impl winit::application::ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        let window = std::sync::Arc::new(
+            event_loop
+                .create_window(winit::window::WindowAttributes::default())
+                .unwrap(),
+        );
+        self.window = Some(window);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        _ = (event_loop, window_id, event);
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let app = App::new();
+    let mut app = App::new().await;
+    app.run();
 }
