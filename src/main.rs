@@ -5,6 +5,7 @@ struct App {
     queue: wgpu::Queue,
     render_pipeline: wgpu::RenderPipeline,
     window: Option<std::sync::Arc<winit::window::Window>>,
+    surface: Option<wgpu::Surface<'static>>,
 }
 
 impl App {
@@ -22,14 +23,8 @@ impl App {
             queue: queue,
             render_pipeline: render_pipeline,
             window: None,
+            surface: None,
         }
-    }
-
-    fn run(&mut self) {
-        winit::event_loop::EventLoop::new()
-            .unwrap()
-            .run_app(self)
-            .unwrap();
     }
 
     fn create_instance() -> wgpu::Instance {
@@ -118,6 +113,33 @@ impl App {
             cache: cache.as_ref(),
         })
     }
+
+    fn run(&mut self) {
+        let event_loop = winit::event_loop::EventLoop::new().unwrap();
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        event_loop.run_app(self).unwrap();
+    }
+
+    fn render(&self) {
+        match self.surface.as_ref().unwrap().get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(texture) => {
+                println!("Drawing frame...");
+                self.render_impl(
+                    texture
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default()),
+                );
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                println!("Window is occluded, skipping frame...");
+            }
+            current_texture => {
+                panic!("surface.get_current_texture() returned {current_texture:?}");
+            }
+        }
+    }
+
+    fn render_impl(&self, texture_view: wgpu::TextureView) {}
 }
 
 impl winit::application::ApplicationHandler for App {
@@ -127,16 +149,30 @@ impl winit::application::ApplicationHandler for App {
                 .create_window(winit::window::WindowAttributes::default())
                 .unwrap(),
         );
+        let surface = self.instance.create_surface(window.clone()).unwrap();
+        surface.configure(
+            &self.device,
+            &surface
+                .get_default_config(
+                    &self.adapter,
+                    window.inner_size().width,
+                    window.inner_size().height,
+                )
+                .unwrap(),
+        );
+        self.surface = Some(surface);
         self.window = Some(window);
     }
 
     fn window_event(
         &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        _ = (event_loop, window_id, event);
+        if event == winit::event::WindowEvent::RedrawRequested {
+            self.render();
+        }
     }
 }
 
