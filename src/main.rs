@@ -25,9 +25,18 @@ async fn pick_adapter(instance: &wgpu::Instance) -> wgpu::Adapter {
     best_adapter.unwrap()
 }
 
+async fn request_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
+    adapter
+        .request_device(&wgpu::DeviceDescriptor::default())
+        .await
+        .unwrap()
+}
+
 #[tokio::main]
 async fn main() {
     let instance = create_instance();
     let adapter = pick_adapter(&instance).await;
-    _ = adapter;
+    let (device, queue) = request_device(&adapter).await;
+    _ = device;
+    _ = queue;
 }
