@@ -32,11 +32,67 @@ async fn request_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) 
         .unwrap()
 }
 
+fn create_pipeline_cache(device: &wgpu::Device) -> Option<wgpu::PipelineCache> {
+    if device
+        .features()
+        .features_wgpu
+        .contains(wgpu::FeaturesWGPU::PIPELINE_CACHE)
+    {
+        unsafe {
+            Some(
+                device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                    label: None,
+                    data: None,
+                    fallback: false,
+                }),
+            )
+        }
+    } else {
+        None
+    }
+}
+
+fn create_render_pipeline(device: &wgpu::Device, wgsl_shader: &str) -> wgpu::RenderPipeline {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(wgsl_shader)),
+    });
+    let cache = create_pipeline_cache(&device);
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
+        layout: None,
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                blend: None,
+                write_mask: wgpu::ColorWrites::all(),
+            })],
+        }),
+        multiview_mask: None,
+        cache: cache.as_ref(),
+    })
+}
+
 #[tokio::main]
 async fn main() {
     let instance = create_instance();
     let adapter = pick_adapter(&instance).await;
     let (device, queue) = request_device(&adapter).await;
-    _ = device;
+    let shader = std::fs::read("shader.wgsl").unwrap();
+    let shader_str = str::from_utf8(shader.as_slice()).unwrap();
+    let render_pipeline = create_render_pipeline(&device, shader_str);
+    _ = render_pipeline;
     _ = queue;
 }
