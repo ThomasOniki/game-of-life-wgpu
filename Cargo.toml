@@ -1,2 +1,5 @@
 [package]
 name = "game-of-life-wgpu"
+
+[dependencies]
+wgpu = "30"
