@@ -4,8 +4,10 @@ struct App {
     device: wgpu::Device,
     queue: wgpu::Queue,
     ssbos: [wgpu::Buffer; 2],
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_groups: [wgpu::BindGroup; 2],
+    compute_bind_groups: [wgpu::BindGroup; 2],
+    compute_pipeline: wgpu::ComputePipeline,
+    render_bind_group_layout: wgpu::BindGroupLayout,
+    render_bind_groups: [wgpu::BindGroup; 2],
     window: Option<std::sync::Arc<winit::window::Window>>,
     surface: Option<wgpu::Surface<'static>>,
     format: Option<wgpu::TextureFormat>,
@@ -18,23 +20,47 @@ impl App {
         let instance = App::create_instance();
         let adapter = App::pick_adapter(&instance).await;
         let (device, queue) = App::request_device(&adapter).await;
+
+        let shader = App::create_shader(&device, "shaders/compute.wgsl");
         let ssbos = [
             App::create_ssbo(&device, &queue),
             App::create_ssbo(&device, &queue),
         ];
-        let bind_group_layout = App::create_bind_group_layout(&device);
-        let bind_groups = [
-            App::create_bind_group(&device, &bind_group_layout, &ssbos[0]),
-            App::create_bind_group(&device, &bind_group_layout, &ssbos[1]),
+
+        let compute_bind_group_layout = App::create_compute_bind_group_layout(&device);
+        let compute_bind_groups = [
+            App::create_compute_bind_group(
+                &device,
+                &compute_bind_group_layout,
+                &ssbos[0],
+                &ssbos[1],
+            ),
+            App::create_compute_bind_group(
+                &device,
+                &compute_bind_group_layout,
+                &ssbos[1],
+                &ssbos[0],
+            ),
         ];
+        let compute_pipeline =
+            App::create_compute_pipeline(&device, &shader, &compute_bind_group_layout);
+
+        let render_bind_group_layout = App::create_render_bind_group_layout(&device);
+        let render_bind_groups = [
+            App::create_render_bind_group(&device, &render_bind_group_layout, &ssbos[0]),
+            App::create_render_bind_group(&device, &render_bind_group_layout, &ssbos[1]),
+        ];
+
         App {
             instance,
             adapter,
             device,
             queue,
             ssbos,
-            bind_group_layout: bind_group_layout,
-            bind_groups,
+            compute_bind_groups,
+            compute_pipeline,
+            render_bind_group_layout,
+            render_bind_groups,
             window: None,
             surface: None,
             format: None,
@@ -81,7 +107,107 @@ impl App {
             .unwrap()
     }
 
-    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    fn create_shader(device: &wgpu::Device, path: &str) -> wgpu::ShaderModule {
+        let cwd = std::env::current_dir().unwrap();
+        println!("cwd: {cwd:?}");
+        println!("Compiling shader {path:?}...");
+        let shader = std::fs::read(path).unwrap();
+        let shader_str = str::from_utf8(shader.as_slice()).unwrap();
+
+        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shader_str)),
+        })
+    }
+
+    fn create_compute_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    fn create_compute_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        in_ssbo: &wgpu::Buffer,
+        out_ssbo: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: in_ssbo,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: out_ssbo,
+                        offset: 0,
+                        size: None,
+                    }),
+                },
+            ],
+        })
+    }
+
+    fn create_compute_pipeline_layout(
+        device: &wgpu::Device,
+        bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::PipelineLayout {
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(bind_group_layout)],
+            immediate_size: 0,
+        })
+    }
+
+    fn create_compute_pipeline(
+        device: &wgpu::Device,
+        shader: &wgpu::ShaderModule,
+        bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> wgpu::ComputePipeline {
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&App::create_compute_pipeline_layout(
+                device,
+                bind_group_layout,
+            )),
+            module: shader,
+            entry_point: None,
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        })
+    }
+
+    fn create_render_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -97,7 +223,7 @@ impl App {
         })
     }
 
-    fn create_bind_group(
+    fn create_render_bind_group(
         device: &wgpu::Device,
         layout: &wgpu::BindGroupLayout,
         ssbo: &wgpu::Buffer,
@@ -116,17 +242,43 @@ impl App {
         })
     }
 
-    const ROWS: usize = 8;
-    const COLS: usize = 8;
+    const ROWS: usize = 32;
+    const COLS: usize = 64;
+
+    #[rustfmt::skip]
     const INITIAL_DATA_PRETTY: [[u8; App::COLS / 8]; App::ROWS] = [
-        [0b01000000u8],
-        [0b00100000u8],
-        [0b11100000u8],
-        [0b00000000u8],
-        [0b00000000u8],
-        [0b00000000u8],
-        [0b00000000u8],
-        [0b00000000u8],
+        [0b01000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b11100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
+        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
     ];
 
     const INITIAL_DATA_RAW_SIZE: usize = App::COLS * App::ROWS / 8;
@@ -196,26 +348,19 @@ The available formats are {formats:?}"
         self.device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
-                bind_group_layouts: &[Some(&self.bind_group_layout)],
+                bind_group_layouts: &[Some(&self.render_bind_group_layout)],
                 immediate_size: 0,
             })
     }
 
-    fn create_render_pipeline(&self, wgsl_shader: &str) -> wgpu::RenderPipeline {
-        let shader = self
-            .device
-            .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(wgsl_shader)),
-            });
-
+    fn create_render_pipeline(&self, shader: &wgpu::ShaderModule) -> wgpu::RenderPipeline {
         let cache = App::create_pipeline_cache(&self.device);
         self.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
                 layout: Some(&self.create_render_pipeline_layout()),
                 vertex: wgpu::VertexState {
-                    module: &shader,
+                    module: shader,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     buffers: &[],
@@ -224,7 +369,7 @@ The available formats are {formats:?}"
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
-                    module: &shader,
+                    module: shader,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                     targets: &[Some(wgpu::ColorTargetState {
@@ -291,8 +436,7 @@ The available formats are {formats:?}"
                 multiview_mask: None,
             });
 
-            render_pass.set_bind_group(0, &self.bind_groups[self.frame_index % 2], &[]);
-
+            render_pass.set_bind_group(0, &self.render_bind_groups[self.frame_index % 2], &[]);
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
 
             render_pass.draw(
@@ -300,7 +444,19 @@ The available formats are {formats:?}"
                 std::range::Range { start: 0, end: 1 }.into(),
             );
         }
+
+        {
+            let mut compute_pass = cmd_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: None,
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.compute_pipeline);
+            compute_pass.set_bind_group(0, &self.compute_bind_groups[self.frame_index % 2], &[]);
+            compute_pass.dispatch_workgroups((App::COLS * App::ROWS / 32) as u32, 1, 1);
+        }
+
         self.queue.submit([cmd_encoder.finish()]);
+        self.window.as_ref().unwrap().pre_present_notify();
         self.queue.present(surface_texture);
     }
 }
@@ -352,11 +508,10 @@ impl winit::application::ApplicationHandler for App {
 
         let capabilities = surface.get_capabilities(&self.adapter);
 
-        let shader = std::fs::read("/Users/thomas/Desktop/game-of-life-wgpu/shader.wgsl").unwrap();
-        let shader_str = str::from_utf8(shader.as_slice()).unwrap();
+        let shader = App::create_shader(&self.device, "shaders/graphics.wgsl");
 
         self.format = Some(App::pick_format(&capabilities.formats));
-        self.render_pipeline = Some(self.create_render_pipeline(shader_str));
+        self.render_pipeline = Some(self.create_render_pipeline(&shader));
         self.surface = Some(surface);
         self.window = Some(window);
     }
@@ -370,6 +525,10 @@ impl winit::application::ApplicationHandler for App {
         if event == winit::event::WindowEvent::RedrawRequested {
             self.render();
         }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.window.as_ref().unwrap().request_redraw();
     }
 }
 

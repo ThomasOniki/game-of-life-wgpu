@@ -21,9 +21,9 @@ struct pixelOutput_0
 @fragment
 fn fragment_shader(@builtin(position) pos_0 : vec4<f32>) -> pixelOutput_0
 {
-    var _S2 : vec2<u32> = vec2<u32>(pos_0.xy / vec2<f32>(f32(ssbo_0[i32(2)]), f32(ssbo_0[i32(3)])) * vec2<f32>(vec2<u32>(u32(8), u32(8))));
-    var index_0 : u32 = _S2.x + _S2.y * u32(8);
-    var _S3 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>(((((ssbo_0[index_0 / u32(32)] >> ((index_0 % u32(32))))) & (u32(1)))))), 1.0f) );
+    var _S2 : vec2<u32> = vec2<u32>(pos_0.xy / vec2<f32>(f32(ssbo_0[i32(64)]), f32(ssbo_0[i32(65)])) * vec2<f32>(vec2<u32>(u32(64), u32(32))));
+    var index_0 : u32 = _S2.x + _S2.y * u32(64);
+    var _S3 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>((u32(1) - ((((ssbo_0[index_0 / u32(32)] >> ((index_0 % u32(32))))) & (u32(1))))))), 1.0f) );
     return _S3;
 }
 

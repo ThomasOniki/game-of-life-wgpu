@@ -1,3 +1,5 @@
+#include "constants.h"
+
 [shader("vertex")]
 float4 vertex_shader(uint32_t vertex_index: SV_VertexID)
 {
@@ -9,9 +11,6 @@ float4 vertex_shader(uint32_t vertex_index: SV_VertexID)
 
     return { positions[vertex_index], 0, 1 };
 }
-
-#define ROWS 8
-#define COLS 8
 
 StructuredBuffer<uint32_t> ssbo;
 
@@ -25,10 +24,7 @@ float4 fragment_shader(float4 pos: SV_Position)
     uint32_t2 index2d = uint32_t2(norm_pos * uint32_t2(COLS, ROWS));
     uint32_t index = index2d.x + index2d.y * COLS;
 
-    uint32_t packed = ssbo[index / 32];
-    uint32_t bit_index = index % 32;
+    uint32_t col = (ssbo[index / 32] >> (index % 32)) & 1;
 
-    uint32_t col = (packed >> bit_index) & 1;
-
-    return { float3(col), 1 };
+    return { float3(1 - col), 1 };
 }
