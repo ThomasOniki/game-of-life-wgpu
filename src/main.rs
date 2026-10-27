@@ -3,6 +3,9 @@ struct App {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
+    ssbo: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group: wgpu::BindGroup,
     window: Option<std::sync::Arc<winit::window::Window>>,
     surface: Option<wgpu::Surface<'static>>,
     format: Option<wgpu::TextureFormat>,
@@ -14,11 +17,16 @@ impl App {
         let instance = App::create_instance();
         let adapter = App::pick_adapter(&instance).await;
         let (device, queue) = App::request_device(&adapter).await;
+        let ssbo = App::create_ssbo(&device, &queue);
+        let (bind_group_layout, bind_group) = App::create_bind_group(&device, &ssbo);
         App {
             instance: instance,
             adapter: adapter,
             device: device,
             queue: queue,
+            ssbo: ssbo,
+            bind_group_layout: bind_group_layout,
+            bind_group: bind_group,
             window: None,
             surface: None,
             format: None,
@@ -64,6 +72,77 @@ impl App {
             .unwrap()
     }
 
+    fn create_bind_group(
+        device: &wgpu::Device,
+        ssbo: &wgpu::Buffer,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: ssbo,
+                    offset: 0,
+                    size: None,
+                }),
+            }],
+        });
+        (layout, group)
+    }
+
+    const ROWS: usize = 8;
+    const COLS: usize = 8;
+    const INITIAL_DATA_PRETTY: [[u8; App::COLS / 8]; App::ROWS] = [
+        [0b01000000u8],
+        [0b00100000u8],
+        [0b11100000u8],
+        [0b00000000u8],
+        [0b00000000u8],
+        [0b00000000u8],
+        [0b00000000u8],
+        [0b00000000u8],
+    ];
+
+    const INITIAL_DATA_RAW_SIZE: usize = App::COLS * App::ROWS / 8;
+
+    fn initial_data_raw() -> [u8; App::INITIAL_DATA_RAW_SIZE] {
+        let mut raw: [u8; App::COLS * App::ROWS / 8] =
+            App::INITIAL_DATA_PRETTY.as_flattened().try_into().unwrap();
+        for byte_ref in raw.iter_mut() {
+            let byte = *byte_ref;
+            *byte_ref = 0;
+            for i in 0..8 {
+                *byte_ref |= ((byte >> i) & 1) << (7 - i);
+            }
+        }
+        raw
+    }
+
+    fn create_ssbo(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Buffer {
+        let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: (App::INITIAL_DATA_RAW_SIZE + size_of::<u32>() * 2) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&ssbo, 0, &App::initial_data_raw());
+        ssbo
+    }
+
     fn create_pipeline_cache(device: &wgpu::Device) -> Option<wgpu::PipelineCache> {
         if device
             .features()
@@ -101,6 +180,15 @@ The available formats are {formats:?}"
         );
     }
 
+    fn create_render_pipeline_layout(&self) -> wgpu::PipelineLayout {
+        self.device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: None,
+                bind_group_layouts: &[Some(&self.bind_group_layout)],
+                immediate_size: 0,
+            })
+    }
+
     fn create_render_pipeline(&self, wgsl_shader: &str) -> wgpu::RenderPipeline {
         let shader = self
             .device
@@ -113,7 +201,7 @@ The available formats are {formats:?}"
         self.device
             .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: None,
-                layout: None,
+                layout: Some(&self.create_render_pipeline_layout()),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: None,
@@ -189,7 +277,11 @@ The available formats are {formats:?}"
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
+
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+
             render_pass.draw(
                 std::range::Range { start: 0, end: 3 }.into(),
                 std::range::Range { start: 0, end: 1 }.into(),
@@ -207,6 +299,22 @@ impl winit::application::ApplicationHandler for App {
                 .create_window(winit::window::WindowAttributes::default())
                 .unwrap(),
         );
+
+        let size = window.inner_size();
+
+        let size_bytes = [
+            (size.width >> 0) as u8,
+            (size.width >> 8) as u8,
+            (size.width >> 16) as u8,
+            (size.width >> 24) as u8,
+            (size.height >> 0) as u8,
+            (size.height >> 8) as u8,
+            (size.height >> 16) as u8,
+            (size.height >> 24) as u8,
+        ];
+        self.queue
+            .write_buffer(&self.ssbo, App::INITIAL_DATA_RAW_SIZE as u64, &size_bytes);
+
         let surface = self.instance.create_surface(window.clone()).unwrap();
         surface.configure(
             &self.device,
@@ -219,9 +327,11 @@ impl winit::application::ApplicationHandler for App {
                 .unwrap(),
         );
 
+        window.request_redraw();
+
         let capabilities = surface.get_capabilities(&self.adapter);
 
-        let shader = std::fs::read("shader.wgsl").unwrap();
+        let shader = std::fs::read("/Users/thomas/Desktop/game-of-life-wgpu/shader.wgsl").unwrap();
         let shader_str = str::from_utf8(shader.as_slice()).unwrap();
 
         self.format = Some(App::pick_format(&capabilities.formats));
