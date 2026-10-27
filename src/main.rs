@@ -3,13 +3,14 @@ struct App {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    ssbo: wgpu::Buffer,
+    ssbos: [wgpu::Buffer; 2],
     bind_group_layout: wgpu::BindGroupLayout,
-    bind_group: wgpu::BindGroup,
+    bind_groups: [wgpu::BindGroup; 2],
     window: Option<std::sync::Arc<winit::window::Window>>,
     surface: Option<wgpu::Surface<'static>>,
     format: Option<wgpu::TextureFormat>,
     render_pipeline: Option<wgpu::RenderPipeline>,
+    frame_index: usize,
 }
 
 impl App {
@@ -17,20 +18,28 @@ impl App {
         let instance = App::create_instance();
         let adapter = App::pick_adapter(&instance).await;
         let (device, queue) = App::request_device(&adapter).await;
-        let ssbo = App::create_ssbo(&device, &queue);
-        let (bind_group_layout, bind_group) = App::create_bind_group(&device, &ssbo);
+        let ssbos = [
+            App::create_ssbo(&device, &queue),
+            App::create_ssbo(&device, &queue),
+        ];
+        let bind_group_layout = App::create_bind_group_layout(&device);
+        let bind_groups = [
+            App::create_bind_group(&device, &bind_group_layout, &ssbos[0]),
+            App::create_bind_group(&device, &bind_group_layout, &ssbos[1]),
+        ];
         App {
-            instance: instance,
-            adapter: adapter,
-            device: device,
-            queue: queue,
-            ssbo: ssbo,
+            instance,
+            adapter,
+            device,
+            queue,
+            ssbos,
             bind_group_layout: bind_group_layout,
-            bind_group: bind_group,
+            bind_groups,
             window: None,
             surface: None,
             format: None,
             render_pipeline: None,
+            frame_index: 0,
         }
     }
 
@@ -72,11 +81,8 @@ impl App {
             .unwrap()
     }
 
-    fn create_bind_group(
-        device: &wgpu::Device,
-        ssbo: &wgpu::Buffer,
-    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -88,8 +94,15 @@ impl App {
                 },
                 count: None,
             }],
-        });
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        })
+    }
+
+    fn create_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        ssbo: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &layout,
             entries: &[wgpu::BindGroupEntry {
@@ -100,8 +113,7 @@ impl App {
                     size: None,
                 }),
             }],
-        });
-        (layout, group)
+        })
     }
 
     const ROWS: usize = 8;
@@ -232,10 +244,11 @@ The available formats are {formats:?}"
         event_loop.run_app(self).unwrap();
     }
 
-    fn render(&self) {
+    fn render(&mut self) {
         match self.surface.as_ref().unwrap().get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(texture) => {
                 println!("Drawing frame...");
+                self.frame_index += 1;
                 self.render_impl(texture);
             }
             wgpu::CurrentSurfaceTexture::Occluded => {
@@ -278,7 +291,7 @@ The available formats are {formats:?}"
                 multiview_mask: None,
             });
 
-            render_pass.set_bind_group(0, &self.bind_group, &[]);
+            render_pass.set_bind_group(0, &self.bind_groups[self.frame_index % 2], &[]);
 
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
 
@@ -312,8 +325,16 @@ impl winit::application::ApplicationHandler for App {
             (size.height >> 16) as u8,
             (size.height >> 24) as u8,
         ];
-        self.queue
-            .write_buffer(&self.ssbo, App::INITIAL_DATA_RAW_SIZE as u64, &size_bytes);
+        self.queue.write_buffer(
+            &self.ssbos[0],
+            App::INITIAL_DATA_RAW_SIZE as u64,
+            &size_bytes,
+        );
+        self.queue.write_buffer(
+            &self.ssbos[1],
+            App::INITIAL_DATA_RAW_SIZE as u64,
+            &size_bytes,
+        );
 
         let surface = self.instance.create_surface(window.clone()).unwrap();
         surface.configure(
