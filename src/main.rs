@@ -202,7 +202,10 @@ impl App {
             )),
             module: shader,
             entry_point: None,
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[("0", App::ROWS as f64), ("1", App::COLS as f64)],
+                zero_initialize_workgroup_memory: false,
+            },
             cache: None,
         })
     }
@@ -362,7 +365,10 @@ The available formats are {formats:?}"
                 vertex: wgpu::VertexState {
                     module: shader,
                     entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[("0", App::ROWS as f64), ("1", App::COLS as f64)],
+                        zero_initialize_workgroup_memory: false,
+                    },
                     buffers: &[],
                 },
                 primitive: wgpu::PrimitiveState::default(),
@@ -371,7 +377,10 @@ The available formats are {formats:?}"
                 fragment: Some(wgpu::FragmentState {
                     module: shader,
                     entry_point: None,
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    compilation_options: wgpu::PipelineCompilationOptions {
+                        constants: &[("0", App::ROWS as f64), ("1", App::COLS as f64)],
+                        zero_initialize_workgroup_memory: false,
+                    },
                     targets: &[Some(wgpu::ColorTargetState {
                         format: self.format.unwrap(),
                         blend: None,

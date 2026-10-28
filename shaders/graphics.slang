@@ -1,8 +1,12 @@
-#include "constants.h"
+[vk_constant_id(0)]
+const uint32_t rows = 0;
+[vk_constant_id(1)]
+const uint32_t cols = 0;
 
 [shader("vertex")]
 float4 vertex_shader(uint32_t vertex_index: SV_VertexID)
 {
+
     const float2 positions[] = {
         { -1, -1 },
         { -1, 3 },
@@ -17,8 +21,8 @@ StructuredBuffer<uint32_t> ssbo;
 [shader("fragment")]
 float4 fragment_shader(float4 pos: SV_Position)
 {
-    uint32_t width = ssbo[(ROWS * COLS / 32)];
-    uint32_t height = ssbo[(ROWS * COLS / 32) + 1];
+    uint32_t width = ssbo[(rows * cols / 32)];
+    uint32_t height = ssbo[(rows * cols / 32) + 1];
 
     if (pos.x > width || pos.y > height)
     {
@@ -26,8 +30,8 @@ float4 fragment_shader(float4 pos: SV_Position)
     }
 
     float2 norm_pos = pos.xy / float2(width, height);
-    uint32_t2 index2d = uint32_t2(norm_pos * uint32_t2(COLS, ROWS));
-    uint32_t index = index2d.x + index2d.y * COLS;
+    uint32_t2 index2d = uint32_t2(norm_pos * uint32_t2(cols, rows));
+    uint32_t index = index2d.x + index2d.y * cols;
 
     uint32_t col = (ssbo[index / 32] >> (index % 32)) & 1;
 
