@@ -383,6 +383,55 @@ The available formats are {formats:?}"
             })
     }
 
+    fn resize(&self, size: winit::dpi::PhysicalSize<u32>) {
+        let (width, height) = if size.height > size.width * App::ROWS as u32 / App::COLS as u32 {
+            (size.width, size.width * App::ROWS as u32 / App::COLS as u32)
+        } else {
+            (
+                size.height * App::COLS as u32 / App::ROWS as u32,
+                size.height,
+            )
+        };
+
+        let size_bytes = [
+            (width >> 0) as u8,
+            (width >> 8) as u8,
+            (width >> 16) as u8,
+            (width >> 24) as u8,
+            (height >> 0) as u8,
+            (height >> 8) as u8,
+            (height >> 16) as u8,
+            (height >> 24) as u8,
+        ];
+        self.queue.write_buffer(
+            &self.ssbos[0],
+            App::INITIAL_DATA_RAW_SIZE as u64,
+            &size_bytes,
+        );
+        self.queue.write_buffer(
+            &self.ssbos[1],
+            App::INITIAL_DATA_RAW_SIZE as u64,
+            &size_bytes,
+        );
+
+        let surface = self.surface.as_ref().unwrap();
+
+        surface.configure(
+            &self.device,
+            &wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: self.format.unwrap(),
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: size.width,
+                height: size.height,
+                desired_maximum_frame_latency: 2,
+                present_mode: wgpu::PresentMode::AutoVsync,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+            },
+        );
+    }
+
     fn run(&mut self) {
         let event_loop = winit::event_loop::EventLoop::new().unwrap();
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
@@ -469,45 +518,8 @@ impl winit::application::ApplicationHandler for App {
                 .unwrap(),
         );
 
-        let mut size = window.inner_size();
-        if size.height > size.width * App::ROWS as u32 / App::COLS as u32 {
-            size.height = size.width * App::ROWS as u32 / App::COLS as u32;
-        } else {
-            size.width = size.height * App::COLS as u32 / App::ROWS as u32;
-        }
-
-        let size_bytes = [
-            (size.width >> 0) as u8,
-            (size.width >> 8) as u8,
-            (size.width >> 16) as u8,
-            (size.width >> 24) as u8,
-            (size.height >> 0) as u8,
-            (size.height >> 8) as u8,
-            (size.height >> 16) as u8,
-            (size.height >> 24) as u8,
-        ];
-        self.queue.write_buffer(
-            &self.ssbos[0],
-            App::INITIAL_DATA_RAW_SIZE as u64,
-            &size_bytes,
-        );
-        self.queue.write_buffer(
-            &self.ssbos[1],
-            App::INITIAL_DATA_RAW_SIZE as u64,
-            &size_bytes,
-        );
-
+        let size = window.inner_size();
         let surface = self.instance.create_surface(window.clone()).unwrap();
-        surface.configure(
-            &self.device,
-            &surface
-                .get_default_config(
-                    &self.adapter,
-                    window.inner_size().width,
-                    window.inner_size().height,
-                )
-                .unwrap(),
-        );
 
         window.request_redraw();
 
@@ -519,6 +531,8 @@ impl winit::application::ApplicationHandler for App {
         self.render_pipeline = Some(self.create_render_pipeline(&shader));
         self.surface = Some(surface);
         self.window = Some(window);
+
+        self.resize(size);
     }
 
     fn window_event(
@@ -527,8 +541,13 @@ impl winit::application::ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        if event == winit::event::WindowEvent::RedrawRequested {
-            self.render();
+        match event {
+            winit::event::WindowEvent::RedrawRequested => self.render(),
+            winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
+                println!("Window resized to {width}x{height}.");
+                self.resize(winit::dpi::PhysicalSize { width, height })
+            }
+            _ => (),
         }
     }
 
