@@ -603,7 +603,7 @@ The available formats are {formats:?}"
             });
             compute_pass.set_pipeline(&self.compute_pipeline);
             compute_pass.set_bind_group(0, &self.compute_bind_groups[self.frame_index % 2], &[]);
-            compute_pass.dispatch_workgroups(bitmap_size.width * bitmap_size.height / 32, 1, 1);
+            compute_pass.dispatch_workgroups(bitmap_size.width / 32, bitmap_size.height, 1);
         }
 
         context.queue.submit([cmd_encoder.finish()]);

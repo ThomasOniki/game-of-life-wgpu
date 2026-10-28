@@ -2,9 +2,9 @@
 
 @binding(1) @group(0) var<storage, read_write> out_ssbo_0 : array<u32>;
 
-@id(0) override rows_0 : u32 = u32(0);
-
 @id(1) override cols_0 : u32 = u32(0);
+
+@id(0) override rows_0 : u32 = u32(0);
 
 fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
 {
@@ -69,7 +69,8 @@ fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
 @workgroup_size(1, 1, 1)
 fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
 {
-    var flat_id_0 : u32 = id_0.x + id_0.y * in_ssbo_0[rows_0 * cols_0 / u32(32)] / u32(32);
+    var id_1 : vec2<u32> = id_0.xy;
+    var flat_id_0 : u32 = id_1.x + id_1.y * cols_0 / u32(32);
     var i_0 : u32 = u32(0);
     var new_cells_0 : u32 = u32(0);
     for(;;)

@@ -34,14 +34,14 @@ static uint32_t neighbor(uint32_t index, int32_t x_off, int32_t y_off)
 }
 
 [shader("compute")]
-void compute_shader(uint32_t id: SV_DispatchThreadID)
+void compute_shader(uint32_t2 id: SV_DispatchThreadID)
 {
-    const uint32_t width = in_ssbo[(rows * cols / 32)];
+    const uint32_t flat_id = id.x + id.y * cols / 32;
 
     uint32_t new_cells = 0;
     for (uint32_t i = 0; i < 32; ++i)
     {
-        const uint32_t index = id  * 32 + i;
+        const uint32_t index = flat_id* 32 + i;
         uint32_t value = neighbor(index, 0, 0);
         const uint32_t neighbors = neighbor(index, -1, -1) + neighbor(index, -1, 0) + neighbor(index, -1, 1) +
                                    neighbor(index, 0, -1) + neighbor(index, 0, 1) + neighbor(index, 1, -1) +
@@ -59,5 +59,5 @@ void compute_shader(uint32_t id: SV_DispatchThreadID)
         new_cells |= value << shift;
     }
 
-    out_ssbo[id] = new_cells;
+    out_ssbo[flat_id] = new_cells;
 }
