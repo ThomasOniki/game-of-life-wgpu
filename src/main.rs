@@ -246,7 +246,7 @@ impl App {
     const COLS: usize = 64;
 
     #[rustfmt::skip]
-    const INITIAL_DATA_PRETTY: [[u8; App::COLS / 8]; App::ROWS] = [
+    const INITIAL_DATA_PRETTY: [[u8; App::COLS / 8 ]; App::ROWS] = [
         [0b01000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
         [0b00100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
         [0b11100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
@@ -469,7 +469,12 @@ impl winit::application::ApplicationHandler for App {
                 .unwrap(),
         );
 
-        let size = window.inner_size();
+        let mut size = window.inner_size();
+        if size.height > size.width * App::ROWS as u32 / App::COLS as u32 {
+            size.height = size.width * App::ROWS as u32 / App::COLS as u32;
+        } else {
+            size.width = size.height * App::COLS as u32 / App::ROWS as u32;
+        }
 
         let size_bytes = [
             (size.width >> 0) as u8,
