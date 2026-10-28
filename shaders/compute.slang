@@ -3,7 +3,7 @@
 StructuredBuffer<uint32_t> in_ssbo;
 RWStructuredBuffer<uint32_t> out_ssbo;
 
-static uint32_t neighbor(uint32_t index, uint32_t x_off, uint32_t y_off)
+static uint32_t neighbor(uint32_t index, int32_t x_off, int32_t y_off)
 {
     if (x_off < 0 && (index % COLS == 0))
     {
@@ -13,11 +13,11 @@ static uint32_t neighbor(uint32_t index, uint32_t x_off, uint32_t y_off)
     {
         return 0;
     }
-    if (x_off > 0 && (index % COLS == (ROWS - 1)))
+    if (x_off > 0 && (index % COLS == (COLS - 1)))
     {
         return 0;
     }
-    if (y_off > 0 && (index / COLS == (COLS - 1)))
+    if (y_off > 0 && (index / COLS == (ROWS - 1)))
     {
         return 0;
     }

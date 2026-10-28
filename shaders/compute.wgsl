@@ -2,10 +2,10 @@
 
 @binding(1) @group(0) var<storage, read_write> out_ssbo_0 : array<u32>;
 
-fn neighbor_0( index_0 : u32,  x_off_0 : u32,  y_off_0 : u32) -> u32
+fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
 {
     var _S1 : bool;
-    if(x_off_0 < u32(0))
+    if(x_off_0 < i32(0))
     {
         _S1 = (index_0 % u32(64)) == u32(0);
     }
@@ -17,7 +17,7 @@ fn neighbor_0( index_0 : u32,  x_off_0 : u32,  y_off_0 : u32) -> u32
     {
         return u32(0);
     }
-    if(y_off_0 < u32(0))
+    if(y_off_0 < i32(0))
     {
         _S1 = (index_0 / u32(64)) == u32(0);
     }
@@ -29,9 +29,9 @@ fn neighbor_0( index_0 : u32,  x_off_0 : u32,  y_off_0 : u32) -> u32
     {
         return u32(0);
     }
-    if(x_off_0 > u32(0))
+    if(x_off_0 > i32(0))
     {
-        _S1 = (index_0 % u32(64)) == u32(31);
+        _S1 = (index_0 % u32(64)) == u32(63);
     }
     else
     {
@@ -41,9 +41,9 @@ fn neighbor_0( index_0 : u32,  x_off_0 : u32,  y_off_0 : u32) -> u32
     {
         return u32(0);
     }
-    if(y_off_0 > u32(0))
+    if(y_off_0 > i32(0))
     {
-        _S1 = (index_0 / u32(64)) == u32(63);
+        _S1 = (index_0 / u32(64)) == u32(31);
     }
     else
     {
@@ -53,7 +53,7 @@ fn neighbor_0( index_0 : u32,  x_off_0 : u32,  y_off_0 : u32) -> u32
     {
         return u32(0);
     }
-    var _S2 : u32 = index_0 + x_off_0 + y_off_0 * u32(64);
+    var _S2 : u32 = index_0 + u32(x_off_0) + u32(y_off_0 * i32(64));
     return (((in_ssbo_0[_S2 / u32(32)] >> ((_S2 % u32(32))))) & (u32(1)));
 }
 
@@ -74,8 +74,8 @@ fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
             break;
         }
         var index_1 : u32 = id_1 * u32(32) + i_0;
-        var value_0 : u32 = neighbor_0(index_1, u32(0), u32(0));
-        var neighbors_0 : u32 = neighbor_0(index_1, u32(4294967295), u32(4294967295)) + neighbor_0(index_1, u32(4294967295), u32(0)) + neighbor_0(index_1, u32(4294967295), u32(1)) + neighbor_0(index_1, u32(0), u32(4294967295)) + neighbor_0(index_1, u32(0), u32(1)) + neighbor_0(index_1, u32(1), u32(4294967295)) + neighbor_0(index_1, u32(1), u32(0)) + neighbor_0(index_1, u32(1), u32(1));
+        var value_0 : u32 = neighbor_0(index_1, i32(0), i32(0));
+        var neighbors_0 : u32 = neighbor_0(index_1, i32(-1), i32(-1)) + neighbor_0(index_1, i32(-1), i32(0)) + neighbor_0(index_1, i32(-1), i32(1)) + neighbor_0(index_1, i32(0), i32(-1)) + neighbor_0(index_1, i32(0), i32(1)) + neighbor_0(index_1, i32(1), i32(-1)) + neighbor_0(index_1, i32(1), i32(0)) + neighbor_0(index_1, i32(1), i32(1));
         var _S3 : bool;
         if(value_0 == u32(1))
         {
