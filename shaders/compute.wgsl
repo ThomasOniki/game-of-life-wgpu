@@ -62,7 +62,7 @@ fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
         return u32(0);
     }
     var _S6 : u32 = index_0 + u32(x_off_0) + u32(y_off_0) * cols_0;
-    return (((in_ssbo_0[_S6 / u32(32)] >> ((_S6 / u32(8) * u32(8) + (u32(7) - _S6 % u32(8)))))) & (u32(1)));
+    return (((in_ssbo_0[_S6 / u32(32)] >> (_S6))) & (u32(1)));
 }
 
 @compute
@@ -142,7 +142,7 @@ fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
         {
             value_2 = value_1;
         }
-        var new_cells_1 : u32 = (new_cells_0 | (((value_2 << ((i_0 / u32(8) * u32(8) + (u32(7) - i_0 % u32(8))))))));
+        var new_cells_1 : u32 = (new_cells_0 | (((value_2 << (i_0)))));
         i_0 = i_0 + u32(1);
         new_cells_0 = new_cells_1;
     }

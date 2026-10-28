@@ -29,13 +29,14 @@ impl Bitmap {
         assert_eq!(bytes[prefix], b'\n');
         prefix += "\n".len();
 
-        assert!(((width * height + 7) / 8) as usize <= bytes.len() - prefix);
+        let size = width as usize * height as usize / 8;
+        assert!(size <= bytes.len() - prefix);
 
         assert!(width % 32 == 0);
 
         Self {
             size: BitmapSize { width, height },
-            data: bytes[prefix..].into(),
+            data: bytes[prefix..prefix + size].into(),
         }
     }
 }
@@ -203,10 +204,9 @@ struct Renderer {
 
 impl Renderer {
     async fn new(context: &Context, bitmap: &Bitmap) -> Self {
-        let shader = Renderer::create_shader(&context.device, "shaders/compute.wgsl");
         let ssbos = [
-            Renderer::create_ssbo(&context.device, &context.queue, bitmap),
-            Renderer::create_ssbo(&context.device, &context.queue, bitmap),
+            Renderer::create_ssbo(&context.device, bitmap.size),
+            Renderer::create_ssbo(&context.device, bitmap.size),
         ];
 
         let compute_bind_group_layout = Renderer::create_compute_bind_group_layout(&context.device);
@@ -224,11 +224,24 @@ impl Renderer {
                 &ssbos[0],
             ),
         ];
+
+        context.queue.write_buffer(&ssbos[1], 0, &bitmap.data);
+        Renderer::reorder_bits(
+            context,
+            &compute_bind_group_layout,
+            &compute_bind_groups[1],
+            bitmap.size,
+        );
+
+        let shader = Renderer::create_shader(&context.device, "shaders/compute.wgsl");
         let compute_pipeline = Renderer::create_compute_pipeline(
             &context.device,
             &shader,
             &compute_bind_group_layout,
-            bitmap.size,
+            &[
+                ("0", bitmap.size.height as f64),
+                ("1", bitmap.size.width as f64),
+            ],
         );
 
         let render_bind_group_layout = Renderer::create_render_bind_group_layout(&context.device);
@@ -257,17 +270,15 @@ impl Renderer {
         }
     }
 
-    fn create_shader(device: &wgpu::Device, path: &str) -> wgpu::ShaderModule {
-        let cwd = std::env::current_dir().unwrap();
-        println!("cwd: {cwd:?}");
-        println!("Compiling shader {path:?}...");
-        let shader = std::fs::read(path).unwrap();
-        let shader_str = str::from_utf8(shader.as_slice()).unwrap();
-
-        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    fn create_ssbo(device: &wgpu::Device, bitmap_size: BitmapSize) -> wgpu::Buffer {
+        let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shader_str)),
-        })
+            size: bitmap_size.width as u64 * bitmap_size.height as u64 / 8
+                + size_of::<BitmapSize>() as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        ssbo
     }
 
     fn create_compute_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -328,6 +339,19 @@ impl Renderer {
         })
     }
 
+    fn create_shader(device: &wgpu::Device, path: &str) -> wgpu::ShaderModule {
+        let cwd = std::env::current_dir().unwrap();
+        println!("cwd: {cwd:?}");
+        println!("Compiling shader {path:?}...");
+        let shader = std::fs::read(path).unwrap();
+        let shader_str = str::from_utf8(shader.as_slice()).unwrap();
+
+        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shader_str)),
+        })
+    }
+
     fn create_compute_pipeline_layout(
         device: &wgpu::Device,
         bind_group_layout: &wgpu::BindGroupLayout,
@@ -343,7 +367,7 @@ impl Renderer {
         device: &wgpu::Device,
         shader: &wgpu::ShaderModule,
         bind_group_layout: &wgpu::BindGroupLayout,
-        bitmap_size: BitmapSize,
+        constants: &[(&str, f64)],
     ) -> wgpu::ComputePipeline {
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -354,14 +378,40 @@ impl Renderer {
             module: shader,
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &[
-                    ("0", bitmap_size.height as f64),
-                    ("1", bitmap_size.width as f64),
-                ],
+                constants,
                 zero_initialize_workgroup_memory: false,
             },
             cache: None,
         })
+    }
+
+    fn reorder_bits(
+        context: &Context,
+        bind_group_layout: &wgpu::BindGroupLayout,
+        bind_group: &wgpu::BindGroup,
+        bitmap_size: BitmapSize,
+    ) {
+        let shader = Renderer::create_shader(&context.device, "shaders/reorder.wgsl");
+        let pipeline = Renderer::create_compute_pipeline(
+            &context.device,
+            &shader,
+            &bind_group_layout,
+            &[("0", bitmap_size.width as f64)],
+        );
+
+        let mut cmd_encoder = context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+        {
+            let mut compute_pass =
+                cmd_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+            compute_pass.set_pipeline(&pipeline);
+            compute_pass.set_bind_group(0, bind_group, &[]);
+            compute_pass.dispatch_workgroups(bitmap_size.width / 32, bitmap_size.height, 1);
+        }
+
+        context.queue.submit([cmd_encoder.finish()]);
     }
 
     fn create_render_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -397,17 +447,6 @@ impl Renderer {
                 }),
             }],
         })
-    }
-
-    fn create_ssbo(device: &wgpu::Device, queue: &wgpu::Queue, bitmap: &Bitmap) -> wgpu::Buffer {
-        let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: (bitmap.data.len() + size_of::<BitmapSize>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        queue.write_buffer(&ssbo, 0, &bitmap.data);
-        ssbo
     }
 
     fn create_pipeline_cache(context: &Context) -> Option<wgpu::PipelineCache> {
@@ -538,12 +577,12 @@ The available formats are {formats:?}"
         ];
         context.queue.write_buffer(
             &self.ssbos[0],
-            (bitmap_size.width * bitmap_size.height / 8) as u64,
+            bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
             &size_bytes,
         );
         context.queue.write_buffer(
             &self.ssbos[1],
-            (bitmap_size.width * bitmap_size.height / 8) as u64,
+            bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
             &size_bytes,
         );
     }
@@ -587,8 +626,8 @@ The available formats are {formats:?}"
                 multiview_mask: None,
             });
 
-            render_pass.set_bind_group(0, &self.render_bind_groups[self.frame_index % 2], &[]);
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+            render_pass.set_bind_group(0, &self.render_bind_groups[self.frame_index % 2], &[]);
 
             render_pass.draw(
                 std::range::Range { start: 0, end: 3 }.into(),
@@ -597,10 +636,8 @@ The available formats are {formats:?}"
         }
 
         {
-            let mut compute_pass = cmd_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
+            let mut compute_pass =
+                cmd_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
             compute_pass.set_pipeline(&self.compute_pipeline);
             compute_pass.set_bind_group(0, &self.compute_bind_groups[self.frame_index % 2], &[]);
             compute_pass.dispatch_workgroups(bitmap_size.width / 32, bitmap_size.height, 1);
@@ -609,10 +646,6 @@ The available formats are {formats:?}"
         context.queue.submit([cmd_encoder.finish()]);
         window.window.pre_present_notify();
         context.queue.present(surface_texture);
-
-        if self.frame_index == 0 {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-        }
 
         self.frame_index += 1;
     }
@@ -643,7 +676,6 @@ impl Window {
         let surface = context.instance.create_surface(window.clone()).unwrap();
 
         window.request_redraw();
-
         Window { window, surface }
     }
 

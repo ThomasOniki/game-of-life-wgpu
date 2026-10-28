@@ -33,9 +33,7 @@ float4 fragment_shader(float4 pos: SV_Position)
     const uint32_t2 index2d = uint32_t2(norm_pos * uint32_t2(cols, rows));
     const uint32_t index = index2d.x + index2d.y * cols;
 
-    const uint32_t shift = index / 8 * 8 + (7 - index % 8);
-
-    const uint32_t col = (ssbo[index / 32] >> shift) & 1;
+    const uint32_t col = (ssbo[index / 32] >> index) & 1;
 
     return { float3(1 - col), 1 };
 }
