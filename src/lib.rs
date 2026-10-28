@@ -63,24 +63,16 @@ impl App {
         }
     }
 
-    fn resize(&self, size: winit::dpi::PhysicalSize<u32>) {
-        self.renderer
-            .update_size(&self.context, size, self.bitmap_size);
-
-        self.window.as_ref().unwrap().surface.configure(
-            &self.context.device,
-            &wgpu::SurfaceConfiguration {
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: self.renderer.format.unwrap(),
-                color_space: wgpu::SurfaceColorSpace::Auto,
-                width: size.width,
-                height: size.height,
-                desired_maximum_frame_latency: 2,
-                present_mode: wgpu::PresentMode::AutoVsync,
-                alpha_mode: wgpu::CompositeAlphaMode::Auto,
-                view_formats: vec![],
-            },
+    fn resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        let window = self.window.as_mut().unwrap();
+        window.update_size(
+            &self.context,
+            size,
+            self.bitmap_size,
+            self.renderer.format.unwrap(),
         );
+        self.renderer
+            .update_size(&self.context, window.viewport, self.bitmap_size);
     }
 
     pub fn run(&mut self) {
@@ -92,7 +84,7 @@ impl App {
 
 impl winit::application::ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        let window = Window::new(&self.context, event_loop);
+        let window = Window::new(&self.context, event_loop, self.bitmap_size);
 
         self.renderer
             .create_pipeline(&self.context, &window, self.bitmap_size);
@@ -118,9 +110,9 @@ impl winit::application::ApplicationHandler for App {
                     )
                 }
             }
-            winit::event::WindowEvent::Resized(winit::dpi::PhysicalSize { width, height }) => {
-                println!("Window resized to {width}x{height}.");
-                self.resize(winit::dpi::PhysicalSize { width, height })
+            winit::event::WindowEvent::Resized(size) => {
+                println!("Window resized to {}x{}.", size.width, size.height);
+                self.resize(size)
             }
             _ => (),
         }
@@ -274,7 +266,7 @@ impl Renderer {
         let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
             size: bitmap_size.width as u64 * bitmap_size.height as u64 / 8
-                + size_of::<BitmapSize>() as u64,
+                + size_of::<Viewport>() as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -547,43 +539,31 @@ The available formats are {formats:?}"
             })
     }
 
-    pub fn update_size(
-        &self,
-        context: &Context,
-        size: winit::dpi::PhysicalSize<u32>,
-        bitmap_size: BitmapSize,
-    ) {
-        let (width, height) = if size.height > size.width * bitmap_size.height / bitmap_size.width {
-            (
-                size.width,
-                size.width * bitmap_size.height / bitmap_size.width,
-            )
-        } else {
-            (
-                size.height * bitmap_size.width / bitmap_size.height,
-                size.height,
-            )
-        };
+    fn u32_to_bytes(value: u32) -> [u8; 4] {
+        return [
+            (value >> 0) as u8,
+            (value >> 8) as u8,
+            (value >> 16) as u8,
+            (value >> 24) as u8,
+        ];
+    }
 
-        let size_bytes = [
-            (width >> 0) as u8,
-            (width >> 8) as u8,
-            (width >> 16) as u8,
-            (width >> 24) as u8,
-            (height >> 0) as u8,
-            (height >> 8) as u8,
-            (height >> 16) as u8,
-            (height >> 24) as u8,
+    pub fn update_size(&self, context: &Context, viewport: Viewport, bitmap_size: BitmapSize) {
+        let bytes = [
+            Renderer::u32_to_bytes(viewport.width),
+            Renderer::u32_to_bytes(viewport.height),
+            Renderer::u32_to_bytes(viewport.x),
+            Renderer::u32_to_bytes(viewport.y),
         ];
         context.queue.write_buffer(
             &self.ssbos[0],
             bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
-            &size_bytes,
+            bytes.as_flattened(),
         );
         context.queue.write_buffer(
             &self.ssbos[1],
             bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
-            &size_bytes,
+            bytes.as_flattened(),
         );
     }
 
@@ -612,9 +592,9 @@ The available formats are {formats:?}"
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 1.0,
-                            g: 1.0,
-                            b: 1.0,
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -625,6 +605,14 @@ The available formats are {formats:?}"
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
+            render_pass.set_viewport(
+                window.viewport.x as f32,
+                window.viewport.y as f32,
+                window.viewport.width as f32,
+                window.viewport.height as f32,
+                0.0,
+                1.0,
+            );
 
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
             render_pass.set_bind_group(0, &self.render_bind_groups[self.frame_index % 2], &[]);
@@ -660,13 +648,52 @@ The available formats are {formats:?}"
     }
 }
 
+#[derive(Clone, Copy)]
+struct Viewport {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+}
+
+impl Viewport {
+    fn new(
+        winit::dpi::PhysicalSize { width, height }: winit::dpi::PhysicalSize<u32>,
+        bitmap_size: BitmapSize,
+    ) -> Self {
+        if height > width * bitmap_size.height / bitmap_size.width {
+            let new_height = width * bitmap_size.height / bitmap_size.width;
+            Self {
+                x: 0,
+                y: (height - new_height) / 2,
+                width: width,
+                height: new_height,
+            }
+        } else {
+            let new_width = height * bitmap_size.width / bitmap_size.height;
+            Self {
+                x: (width - new_width) / 2,
+                y: 0,
+                width: new_width,
+                height: height,
+            }
+        }
+    }
+}
+
 struct Window {
     window: std::sync::Arc<winit::window::Window>,
     surface: wgpu::Surface<'static>,
+    size: winit::dpi::PhysicalSize<u32>,
+    viewport: Viewport,
 }
 
 impl Window {
-    fn new(context: &Context, event_loop: &winit::event_loop::ActiveEventLoop) -> Self {
+    fn new(
+        context: &Context,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        bitmap_size: BitmapSize,
+    ) -> Self {
         let window = std::sync::Arc::new(
             event_loop
                 .create_window(winit::window::WindowAttributes::default())
@@ -674,9 +701,40 @@ impl Window {
         );
 
         let surface = context.instance.create_surface(window.clone()).unwrap();
+        let size = window.inner_size();
 
         window.request_redraw();
-        Window { window, surface }
+        Window {
+            window,
+            surface,
+            size,
+            viewport: Viewport::new(size, bitmap_size),
+        }
+    }
+
+    fn update_size(
+        &mut self,
+        context: &Context,
+        size: winit::dpi::PhysicalSize<u32>,
+        bitmap_size: BitmapSize,
+        format: wgpu::TextureFormat,
+    ) {
+        self.size = size;
+        self.viewport = Viewport::new(size, bitmap_size);
+        self.surface.configure(
+            &context.device,
+            &wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: size.width,
+                height: size.height,
+                desired_maximum_frame_latency: 2,
+                present_mode: wgpu::PresentMode::AutoVsync,
+                alpha_mode: wgpu::CompositeAlphaMode::Auto,
+                view_formats: vec![],
+            },
+        )
     }
 
     fn configure_surface(&self, context: &Context, format: wgpu::TextureFormat) {

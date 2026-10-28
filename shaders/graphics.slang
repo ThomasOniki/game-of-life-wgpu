@@ -21,15 +21,10 @@ StructuredBuffer<uint32_t> ssbo;
 [shader("fragment")]
 float4 fragment_shader(float4 pos: SV_Position)
 {
-    const uint32_t width = ssbo[(rows * cols / 32)];
-    const uint32_t height = ssbo[(rows * cols / 32) + 1];
+    const uint32_t2 size = { ssbo[(rows * cols / 32)], ssbo[(rows * cols / 32) + 1] };
+    const float2 offset = { ssbo[(rows * cols / 32) + 2], ssbo[(rows * cols / 32) + 3] };
 
-    if (pos.x > width || pos.y > height)
-    {
-        return { 0, 0, 0, 1 };
-    }
-
-    const float2 norm_pos = pos.xy / float2(width, height);
+    const float2 norm_pos = (pos.xy - offset) / size;
     const uint32_t2 index2d = uint32_t2(norm_pos * uint32_t2(cols, rows));
     const uint32_t index = index2d.x + index2d.y * cols;
 

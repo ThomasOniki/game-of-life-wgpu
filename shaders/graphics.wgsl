@@ -26,25 +26,9 @@ struct pixelOutput_0
 fn fragment_shader(@builtin(position) pos_0 : vec4<f32>) -> pixelOutput_0
 {
     var _S2 : u32 = rows_0 * cols_0;
-    var height_0 : u32 = ssbo_0[_S2 / u32(32) + u32(1)];
-    var _S3 : f32 = f32(ssbo_0[_S2 / u32(32)]);
-    var _S4 : bool;
-    if((pos_0.x) > _S3)
-    {
-        _S4 = true;
-    }
-    else
-    {
-        _S4 = (pos_0.y) > f32(height_0);
-    }
-    if(_S4)
-    {
-        var _S5 : pixelOutput_0 = pixelOutput_0( vec4<f32>(0.0f, 0.0f, 0.0f, 1.0f) );
-        return _S5;
-    }
-    var _S6 : vec2<u32> = vec2<u32>(pos_0.xy / vec2<f32>(_S3, f32(height_0)) * vec2<f32>(vec2<u32>(cols_0, rows_0)));
-    var index_0 : u32 = _S6.x + _S6.y * cols_0;
-    var _S7 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>((u32(1) - ((((ssbo_0[index_0 / u32(32)] >> (index_0))) & (u32(1))))))), 1.0f) );
-    return _S7;
+    var _S3 : vec2<u32> = vec2<u32>((pos_0.xy - vec2<f32>(f32(ssbo_0[_S2 / u32(32) + u32(2)]), f32(ssbo_0[_S2 / u32(32) + u32(3)]))) / vec2<f32>(vec2<u32>(ssbo_0[_S2 / u32(32)], ssbo_0[_S2 / u32(32) + u32(1)])) * vec2<f32>(vec2<u32>(cols_0, rows_0)));
+    var index_0 : u32 = _S3.x + _S3.y * cols_0;
+    var _S4 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>((u32(1) - ((((ssbo_0[index_0 / u32(32)] >> (index_0))) & (u32(1))))))), 1.0f) );
+    return _S4;
 }
 
