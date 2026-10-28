@@ -5,7 +5,7 @@ StructuredBuffer<uint32_t> in_ssbo;
 RWStructuredBuffer<uint32_t> out_ssbo;
 
 [shader("compute")]
-void compute_shader(uint32_t2 id: SV_DispatchThreadID)
+void main(uint32_t2 id: SV_DispatchThreadID)
 {
     const uint32_t flat_id = id.x + id.y * cols / 32;
 
@@ -19,5 +19,7 @@ void compute_shader(uint32_t2 id: SV_DispatchThreadID)
         }
     }
 
-    out_ssbo[flat_id] = new_cells;
+    const uint32_t padded_id = (id.x + 1) + (id.y + 1) * (cols / 32 + 2);
+
+    out_ssbo[padded_id] = new_cells;
 }

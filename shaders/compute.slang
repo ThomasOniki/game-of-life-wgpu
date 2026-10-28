@@ -1,6 +1,4 @@
 [vk_constant_id(0)]
-const uint32_t rows = 0;
-[vk_constant_id(1)]
 const uint32_t cols = 0;
 
 StructuredBuffer<uint32_t> in_ssbo;
@@ -8,33 +6,15 @@ RWStructuredBuffer<uint32_t> out_ssbo;
 
 static uint32_t neighbor(uint32_t index, int32_t x_off, int32_t y_off)
 {
-    if (x_off < 0 && (index % cols == 0))
-    {
-        return 0;
-    }
-    if (y_off < 0 && (index / cols == 0))
-    {
-        return 0;
-    }
-    if (x_off > 0 && (index % cols == (cols - 1)))
-    {
-        return 0;
-    }
-    if (y_off > 0 && (index / cols == (rows - 1)))
-    {
-        return 0;
-    }
-
     index += x_off;
     index += y_off * cols;
-
-    return (in_ssbo[index / 32] >> index) & 1;
+    return (in_ssbo[index / 32] >> index % 32) & 1;
 }
 
 [shader("compute")]
-void compute_shader(uint32_t2 id: SV_DispatchThreadID)
+void main(uint32_t2 id: SV_DispatchThreadID)
 {
-    const uint32_t flat_id = id.x + id.y * cols / 32;
+    const uint32_t flat_id = (id.x + 1) + (id.y + 1) * cols / 32;
 
     uint32_t new_cells = 0;
     for (uint32_t i = 0; i < 32; ++i)
