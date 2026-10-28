@@ -522,7 +522,7 @@ The available formats are {formats:?}"
         } else {
             (
                 size.height * bitmap_size.width / bitmap_size.height,
-                size.width,
+                size.height,
             )
         };
 
