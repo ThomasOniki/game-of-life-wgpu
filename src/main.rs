@@ -1,5 +1,9 @@
 #[tokio::main]
 async fn main() {
-    let mut app = game_of_life_wgpu::App::new().await;
+    if std::env::args().len() != 2 {
+        println!("USAGE: game_of_life_wgpu <path-to-pbm>");
+        return;
+    }
+    let mut app = game_of_life_wgpu::App::new(&std::env::args().last().unwrap()).await;
     app.run();
 }

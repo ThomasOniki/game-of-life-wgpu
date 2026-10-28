@@ -1,76 +1,70 @@
-const ROWS: usize = 32;
-const COLS: usize = 64;
+#[derive(Clone, Copy)]
+struct BitmapSize {
+    width: u32,
+    height: u32,
+}
 
-#[rustfmt::skip]
-    const INITIAL_DATA_PRETTY: [[u8; COLS / 8 ]; ROWS] = [
-        [0b01000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b11100000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-        [0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8, 0b00000000u8],
-    ];
+struct Bitmap {
+    size: BitmapSize,
+    data: Vec<u8>,
+}
 
-const INITIAL_DATA_RAW_SIZE: usize = COLS * ROWS / 8;
+impl Bitmap {
+    fn load_pbm(path: &str) -> Self {
+        let bytes = std::fs::read(path).unwrap();
 
-fn initial_data_raw() -> [u8; INITIAL_DATA_RAW_SIZE] {
-    let mut raw: [u8; COLS * ROWS / 8] = INITIAL_DATA_PRETTY.as_flattened().try_into().unwrap();
-    for byte_ref in raw.iter_mut() {
-        let byte = *byte_ref;
-        *byte_ref = 0;
-        for i in 0..8 {
-            *byte_ref |= ((byte >> i) & 1) << (7 - i);
+        let mut prefix = 0;
+        assert_eq!(&bytes[prefix..3], "P4\n".as_bytes());
+        prefix += "P4\n".len();
+
+        let (width, width_len) = atoi::atoi(&bytes[prefix..]);
+        prefix += width_len;
+        assert_ne!(width_len, 0);
+        assert_eq!(bytes[prefix], b' ');
+        prefix += " ".len();
+
+        let (height, height_len) = atoi::atoi(&bytes[prefix..]);
+        prefix += height_len;
+        assert_ne!(height_len, 0);
+        assert_eq!(bytes[prefix], b'\n');
+        prefix += "\n".len();
+
+        assert!(((width * height + 7) / 8) as usize <= bytes.len() - prefix);
+
+        assert!(width % 32 == 0);
+
+        Self {
+            size: BitmapSize { width, height },
+            data: bytes[prefix..].into(),
         }
     }
-    raw
 }
 
 pub struct App {
     context: Context,
     renderer: Renderer,
     window: Option<Window>,
+    bitmap_size: BitmapSize,
 }
 
 impl App {
-    pub async fn new() -> Self {
+    pub async fn new(pbm_path: &str) -> Self {
+        let bitmap = Bitmap::load_pbm(pbm_path);
+
         let context = Context::new().await;
-        let renderer = Renderer::new(&context).await;
+        let renderer = Renderer::new(&context, &bitmap).await;
 
         App {
             context,
             renderer,
             window: None,
+            bitmap_size: bitmap.size,
         }
     }
 
     fn resize(&self, size: winit::dpi::PhysicalSize<u32>) {
-        self.renderer.update_size(&self.context, size);
+        self.renderer
+            .update_size(&self.context, size, self.bitmap_size);
 
         self.window.as_ref().unwrap().surface.configure(
             &self.context.device,
@@ -99,7 +93,8 @@ impl winit::application::ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let window = Window::new(&self.context, event_loop);
 
-        self.renderer.create_pipeline(&self.context, &window);
+        self.renderer
+            .create_pipeline(&self.context, &window, self.bitmap_size);
 
         window.configure_surface(&self.context, self.renderer.format.unwrap());
         self.window = Some(window);
@@ -118,6 +113,7 @@ impl winit::application::ApplicationHandler for App {
                         &self.context,
                         &self.window.as_ref().unwrap(),
                         texture,
+                        self.bitmap_size,
                     )
                 }
             }
@@ -206,11 +202,11 @@ struct Renderer {
 }
 
 impl Renderer {
-    async fn new(context: &Context) -> Self {
+    async fn new(context: &Context, bitmap: &Bitmap) -> Self {
         let shader = Renderer::create_shader(&context.device, "shaders/compute.wgsl");
         let ssbos = [
-            Renderer::create_ssbo(&context.device, &context.queue),
-            Renderer::create_ssbo(&context.device, &context.queue),
+            Renderer::create_ssbo(&context.device, &context.queue, bitmap),
+            Renderer::create_ssbo(&context.device, &context.queue, bitmap),
         ];
 
         let compute_bind_group_layout = Renderer::create_compute_bind_group_layout(&context.device);
@@ -228,8 +224,12 @@ impl Renderer {
                 &ssbos[0],
             ),
         ];
-        let compute_pipeline =
-            Renderer::create_compute_pipeline(&context.device, &shader, &compute_bind_group_layout);
+        let compute_pipeline = Renderer::create_compute_pipeline(
+            &context.device,
+            &shader,
+            &compute_bind_group_layout,
+            bitmap.size,
+        );
 
         let render_bind_group_layout = Renderer::create_render_bind_group_layout(&context.device);
         let render_bind_groups = [
@@ -343,6 +343,7 @@ impl Renderer {
         device: &wgpu::Device,
         shader: &wgpu::ShaderModule,
         bind_group_layout: &wgpu::BindGroupLayout,
+        bitmap_size: BitmapSize,
     ) -> wgpu::ComputePipeline {
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -353,7 +354,10 @@ impl Renderer {
             module: shader,
             entry_point: None,
             compilation_options: wgpu::PipelineCompilationOptions {
-                constants: &[("0", ROWS as f64), ("1", COLS as f64)],
+                constants: &[
+                    ("0", bitmap_size.height as f64),
+                    ("1", bitmap_size.width as f64),
+                ],
                 zero_initialize_workgroup_memory: false,
             },
             cache: None,
@@ -395,14 +399,14 @@ impl Renderer {
         })
     }
 
-    fn create_ssbo(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Buffer {
+    fn create_ssbo(device: &wgpu::Device, queue: &wgpu::Queue, bitmap: &Bitmap) -> wgpu::Buffer {
         let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: (INITIAL_DATA_RAW_SIZE + size_of::<u32>() * 2) as u64,
+            size: (bitmap.data.len() + size_of::<BitmapSize>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        queue.write_buffer(&ssbo, 0, &initial_data_raw());
+        queue.write_buffer(&ssbo, 0, &bitmap.data);
         ssbo
     }
 
@@ -460,6 +464,7 @@ The available formats are {formats:?}"
         &self,
         context: &Context,
         shader: &wgpu::ShaderModule,
+        bitmap_size: BitmapSize,
     ) -> wgpu::RenderPipeline {
         let cache = Renderer::create_pipeline_cache(context);
         context
@@ -471,7 +476,10 @@ The available formats are {formats:?}"
                     module: shader,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &[("0", ROWS as f64), ("1", COLS as f64)],
+                        constants: &[
+                            ("0", bitmap_size.height as f64),
+                            ("1", bitmap_size.width as f64),
+                        ],
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[],
@@ -483,7 +491,10 @@ The available formats are {formats:?}"
                     module: shader,
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &[("0", ROWS as f64), ("1", COLS as f64)],
+                        constants: &[
+                            ("0", bitmap_size.height as f64),
+                            ("1", bitmap_size.width as f64),
+                        ],
                         zero_initialize_workgroup_memory: false,
                     },
                     targets: &[Some(wgpu::ColorTargetState {
@@ -497,11 +508,22 @@ The available formats are {formats:?}"
             })
     }
 
-    pub fn update_size(&self, context: &Context, size: winit::dpi::PhysicalSize<u32>) {
-        let (width, height) = if size.height > size.width * ROWS as u32 / COLS as u32 {
-            (size.width, size.width * ROWS as u32 / COLS as u32)
+    pub fn update_size(
+        &self,
+        context: &Context,
+        size: winit::dpi::PhysicalSize<u32>,
+        bitmap_size: BitmapSize,
+    ) {
+        let (width, height) = if size.height > size.width * bitmap_size.height / bitmap_size.width {
+            (
+                size.width,
+                size.width * bitmap_size.height / bitmap_size.width,
+            )
         } else {
-            (size.height * COLS as u32 / ROWS as u32, size.height)
+            (
+                size.height * bitmap_size.width / bitmap_size.height,
+                size.width,
+            )
         };
 
         let size_bytes = [
@@ -514,12 +536,16 @@ The available formats are {formats:?}"
             (height >> 16) as u8,
             (height >> 24) as u8,
         ];
-        context
-            .queue
-            .write_buffer(&self.ssbos[0], INITIAL_DATA_RAW_SIZE as u64, &size_bytes);
-        context
-            .queue
-            .write_buffer(&self.ssbos[1], INITIAL_DATA_RAW_SIZE as u64, &size_bytes);
+        context.queue.write_buffer(
+            &self.ssbos[0],
+            (bitmap_size.width * bitmap_size.height / 8) as u64,
+            &size_bytes,
+        );
+        context.queue.write_buffer(
+            &self.ssbos[1],
+            (bitmap_size.width * bitmap_size.height / 8) as u64,
+            &size_bytes,
+        );
     }
 
     fn render_frame(
@@ -527,6 +553,7 @@ The available formats are {formats:?}"
         context: &Context,
         window: &Window,
         surface_texture: wgpu::SurfaceTexture,
+        bitmap_size: BitmapSize,
     ) {
         println!("Rendering frame #{}...", self.frame_index);
 
@@ -576,23 +603,27 @@ The available formats are {formats:?}"
             });
             compute_pass.set_pipeline(&self.compute_pipeline);
             compute_pass.set_bind_group(0, &self.compute_bind_groups[self.frame_index % 2], &[]);
-            compute_pass.dispatch_workgroups((COLS * ROWS / 32) as u32, 1, 1);
+            compute_pass.dispatch_workgroups(bitmap_size.width * bitmap_size.height / 32, 1, 1);
         }
 
         context.queue.submit([cmd_encoder.finish()]);
         window.window.pre_present_notify();
         context.queue.present(surface_texture);
 
+        if self.frame_index == 0 {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+
         self.frame_index += 1;
     }
 
-    fn create_pipeline(&mut self, context: &Context, target: &Window) {
+    fn create_pipeline(&mut self, context: &Context, target: &Window, bitmap_size: BitmapSize) {
         let capabilities = target.surface.get_capabilities(&context.adapter);
 
         let shader = Renderer::create_shader(&context.device, "shaders/graphics.wgsl");
 
         self.format = Some(Renderer::pick_format(&capabilities.formats));
-        self.render_pipeline = Some(self.create_render_pipeline(context, &shader));
+        self.render_pipeline = Some(self.create_render_pipeline(context, &shader, bitmap_size));
     }
 }
 

@@ -44,7 +44,7 @@ fn fragment_shader(@builtin(position) pos_0 : vec4<f32>) -> pixelOutput_0
     }
     var _S6 : vec2<u32> = vec2<u32>(pos_0.xy / vec2<f32>(_S3, f32(height_0)) * vec2<f32>(vec2<u32>(cols_0, rows_0)));
     var index_0 : u32 = _S6.x + _S6.y * cols_0;
-    var _S7 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>((u32(1) - ((((ssbo_0[index_0 / u32(32)] >> ((index_0 % u32(32))))) & (u32(1))))))), 1.0f) );
+    var _S7 : pixelOutput_0 = pixelOutput_0( vec4<f32>(vec3<f32>(vec3<u32>((u32(1) - ((((ssbo_0[index_0 / u32(32)] >> ((index_0 / u32(8) * u32(8) + (u32(7) - index_0 % u32(8)))))) & (u32(1))))))), 1.0f) );
     return _S7;
 }
 

@@ -2,9 +2,9 @@
 
 @binding(1) @group(0) var<storage, read_write> out_ssbo_0 : array<u32>;
 
-@id(1) override cols_0 : u32 = u32(0);
-
 @id(0) override rows_0 : u32 = u32(0);
+
+@id(1) override cols_0 : u32 = u32(0);
 
 fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
 {
@@ -62,14 +62,14 @@ fn neighbor_0( index_0 : u32,  x_off_0 : i32,  y_off_0 : i32) -> u32
         return u32(0);
     }
     var _S6 : u32 = index_0 + u32(x_off_0) + u32(y_off_0) * cols_0;
-    return (((in_ssbo_0[_S6 / u32(32)] >> ((_S6 % u32(32))))) & (u32(1)));
+    return (((in_ssbo_0[_S6 / u32(32)] >> ((_S6 / u32(8) * u32(8) + (u32(7) - _S6 % u32(8)))))) & (u32(1)));
 }
 
 @compute
 @workgroup_size(1, 1, 1)
 fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
 {
-    var id_1 : u32 = id_0.x;
+    var flat_id_0 : u32 = id_0.x + id_0.y * in_ssbo_0[rows_0 * cols_0 / u32(32)] / u32(32);
     var i_0 : u32 = u32(0);
     var new_cells_0 : u32 = u32(0);
     for(;;)
@@ -81,7 +81,7 @@ fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
         {
             break;
         }
-        var index_1 : u32 = id_1 * u32(32) + i_0;
+        var index_1 : u32 = flat_id_0 * u32(32) + i_0;
         var value_0 : u32 = neighbor_0(index_1, i32(0), i32(0));
         var _S7 : u32 = neighbor_0(index_1, i32(-1), i32(-1));
         var _S8 : u32 = neighbor_0(index_1, i32(-1), i32(0));
@@ -141,11 +141,11 @@ fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
         {
             value_2 = value_1;
         }
-        var new_cells_1 : u32 = (new_cells_0 | (((value_2 << (i_0)))));
+        var new_cells_1 : u32 = (new_cells_0 | (((value_2 << ((i_0 / u32(8) * u32(8) + (u32(7) - i_0 % u32(8))))))));
         i_0 = i_0 + u32(1);
         new_cells_0 = new_cells_1;
     }
-    out_ssbo_0[id_1] = new_cells_0;
+    out_ssbo_0[flat_id_0] = new_cells_0;
     return;
 }
 
