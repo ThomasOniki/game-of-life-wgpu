@@ -232,7 +232,7 @@ impl Renderer {
             &compute_bind_group_layout,
             &[
                 ("0", bitmap.size.height as f64),
-                ("1", bitmap.size.width as f64),
+                ("1", (bitmap.size.width / 32) as f64),
             ],
         );
 
