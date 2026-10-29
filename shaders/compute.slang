@@ -1,6 +1,4 @@
 [vk_constant_id(0)]
-const uint32_t rows = 0;
-[vk_constant_id(1)]
 const uint32_t u32_cols = 0;
 
 StructuredBuffer<uint32_t> in_ssbo;
@@ -9,22 +7,19 @@ RWStructuredBuffer<uint32_t> out_ssbo;
 [shader("compute")]
 void main(uint32_t2 id: SV_DispatchThreadID)
 {
-    const uint32_t flat_id = id.x + id.y * u32_cols;
+    const uint32_t flat_id = (id.x + 1) + (id.y + 1) * u32_cols;
 
     const uint32_t row = flat_id / u32_cols;
-    const bool bottommost = row == 0;
-    const bool topmost = row == rows - 1;
 
     const uint32_t col = flat_id % u32_cols;
 
-    const bool leftmost = col == 0;
-    const uint32_t topleft = topmost || leftmost ? 0 : in_ssbo[flat_id + u32_cols - 1];
-    const uint32_t left = leftmost ? 0 : in_ssbo[flat_id - 1];
-    const uint32_t bottomleft = bottommost || leftmost ? 0 : in_ssbo[flat_id - u32_cols - 1];
+    const uint32_t topleft = in_ssbo[flat_id + u32_cols - 1];
+    const uint32_t left = in_ssbo[flat_id - 1];
+    const uint32_t bottomleft = in_ssbo[flat_id - u32_cols - 1];
 
-    uint32_t top = topmost ? 0 : in_ssbo[flat_id + u32_cols];
+    uint32_t top = in_ssbo[flat_id + u32_cols];
     uint32_t middle = in_ssbo[flat_id];
-    uint32_t bottom = bottommost ? 0 : in_ssbo[flat_id - u32_cols];
+    uint32_t bottom = in_ssbo[flat_id - u32_cols];
 
     uint32_t new_cells = 0;
 
@@ -57,15 +52,14 @@ void main(uint32_t2 id: SV_DispatchThreadID)
 
     const uint32_t middle_bit = middle & 1;
 
-    const bool rightmost = col == u32_cols - 1;
-    const uint32_t topright = topmost || rightmost ? 0 : in_ssbo[flat_id + u32_cols + 1];
-    const uint32_t right = rightmost ? 0 : in_ssbo[flat_id + 1];
-    const uint32_t bottomright = bottommost || rightmost ? 0 : in_ssbo[flat_id - u32_cols + 1];
+    const uint32_t topright = in_ssbo[flat_id + u32_cols + 1];
+    const uint32_t right = in_ssbo[flat_id + 1];
+    const uint32_t bottomright = in_ssbo[flat_id - u32_cols + 1];
 
     const uint32_t sum = ((topright & 1) >> 0) + ((right & 1) >> 0) + ((bottomright & 1) >> 0);
 
     const uint32_t neighbors = sum + old + older - middle_bit;
-    
+
     if (neighbors == 3)
     {
         new_cells |= 1 << 31;

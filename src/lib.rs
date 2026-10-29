@@ -225,15 +225,12 @@ impl Renderer {
             bitmap.size,
         );
 
-        let shader = Renderer::create_shader(&context.device, "shaders/compute.wgsl");
+        let shader = Renderer::create_shader(context, "shaders/compute.wgsl");
         let compute_pipeline = Renderer::create_compute_pipeline(
             &context.device,
             &shader,
             &compute_bind_group_layout,
-            &[
-                ("0", bitmap.size.height as f64),
-                ("1", (bitmap.size.width / 32) as f64),
-            ],
+            &[("0", (bitmap.size.width / 32 + 2) as f64)],
         );
 
         let render_bind_group_layout = Renderer::create_render_bind_group_layout(&context.device);
@@ -265,7 +262,8 @@ impl Renderer {
     fn create_ssbo(device: &wgpu::Device, bitmap_size: BitmapSize) -> wgpu::Buffer {
         let ssbo = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: bitmap_size.width as u64 * bitmap_size.height as u64 / 8
+            size: (bitmap_size.width / 8 + size_of::<u32>() as u32 * 2) as u64
+                * (bitmap_size.height + 2) as u64
                 + size_of::<Viewport>() as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
@@ -331,17 +329,19 @@ impl Renderer {
         })
     }
 
-    fn create_shader(device: &wgpu::Device, path: &str) -> wgpu::ShaderModule {
+    fn create_shader(context: &Context, path: &str) -> wgpu::ShaderModule {
         let cwd = std::env::current_dir().unwrap();
         println!("cwd: {cwd:?}");
         println!("Compiling shader {path:?}...");
         let shader = std::fs::read(path).unwrap();
         let shader_str = str::from_utf8(shader.as_slice()).unwrap();
 
-        device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shader_str)),
-        })
+        context
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::from(shader_str)),
+            })
     }
 
     fn create_compute_pipeline_layout(
@@ -383,7 +383,7 @@ impl Renderer {
         bind_group: &wgpu::BindGroup,
         bitmap_size: BitmapSize,
     ) {
-        let shader = Renderer::create_shader(&context.device, "shaders/reorder.wgsl");
+        let shader = Renderer::create_shader(context, "shaders/reorder.wgsl");
         let pipeline = Renderer::create_compute_pipeline(
             &context.device,
             &shader,
@@ -494,7 +494,8 @@ The available formats are {formats:?}"
     fn create_render_pipeline(
         &self,
         context: &Context,
-        shader: &wgpu::ShaderModule,
+        vertex_shader_path: &str,
+        fragment_shader_path: &str,
         bitmap_size: BitmapSize,
     ) -> wgpu::RenderPipeline {
         let cache = Renderer::create_pipeline_cache(context);
@@ -504,13 +505,10 @@ The available formats are {formats:?}"
                 label: None,
                 layout: Some(&self.create_render_pipeline_layout(context)),
                 vertex: wgpu::VertexState {
-                    module: shader,
+                    module: &Renderer::create_shader(context, vertex_shader_path),
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions {
-                        constants: &[
-                            ("0", bitmap_size.height as f64),
-                            ("1", bitmap_size.width as f64),
-                        ],
+                        constants: &[],
                         zero_initialize_workgroup_memory: false,
                     },
                     buffers: &[],
@@ -519,7 +517,7 @@ The available formats are {formats:?}"
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 fragment: Some(wgpu::FragmentState {
-                    module: shader,
+                    module: &Renderer::create_shader(context, fragment_shader_path),
                     entry_point: None,
                     compilation_options: wgpu::PipelineCompilationOptions {
                         constants: &[
@@ -557,12 +555,14 @@ The available formats are {formats:?}"
         ];
         context.queue.write_buffer(
             &self.ssbos[0],
-            bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
+            (bitmap_size.width / 8 + size_of::<u32>() as u32 * 2) as u64
+                * (bitmap_size.height + 2) as u64,
             bytes.as_flattened(),
         );
         context.queue.write_buffer(
             &self.ssbos[1],
-            bitmap_size.width as u64 * bitmap_size.height as u64 / 8,
+            (bitmap_size.width / 8 + size_of::<u32>() as u32 * 2) as u64
+                * (bitmap_size.height + 2) as u64,
             bytes.as_flattened(),
         );
     }
@@ -641,10 +641,13 @@ The available formats are {formats:?}"
     fn create_pipeline(&mut self, context: &Context, target: &Window, bitmap_size: BitmapSize) {
         let capabilities = target.surface.get_capabilities(&context.adapter);
 
-        let shader = Renderer::create_shader(&context.device, "shaders/graphics.wgsl");
-
         self.format = Some(Renderer::pick_format(&capabilities.formats));
-        self.render_pipeline = Some(self.create_render_pipeline(context, &shader, bitmap_size));
+        self.render_pipeline = Some(self.create_render_pipeline(
+            context,
+            "shaders/vertex.wgsl",
+            "shaders/fragment.wgsl",
+            bitmap_size,
+        ));
     }
 }
 
@@ -659,23 +662,26 @@ struct Viewport {
 impl Viewport {
     fn new(
         winit::dpi::PhysicalSize { width, height }: winit::dpi::PhysicalSize<u32>,
-        bitmap_size: BitmapSize,
+        BitmapSize {
+            width: bitmap_width,
+            height: bitmap_height,
+        }: BitmapSize,
     ) -> Self {
-        if height > width * bitmap_size.height / bitmap_size.width {
-            let new_height = width * bitmap_size.height / bitmap_size.width;
+        if height > width * bitmap_height / bitmap_width {
+            let new_height = width * bitmap_height / bitmap_width;
             Self {
                 x: 0,
                 y: (height - new_height) / 2,
-                width: width,
+                width,
                 height: new_height,
             }
         } else {
-            let new_width = height * bitmap_size.width / bitmap_size.height;
+            let new_width = height * bitmap_width / bitmap_height;
             Self {
                 x: (width - new_width) / 2,
                 y: 0,
                 width: new_width,
-                height: height,
+                height,
             }
         }
     }

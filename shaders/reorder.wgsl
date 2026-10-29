@@ -6,10 +6,12 @@
 
 @compute
 @workgroup_size(1, 1, 1)
-fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
+fn main(@builtin(global_invocation_id) id_0 : vec3<u32>)
 {
     var id_1 : vec2<u32> = id_0.xy;
-    var flat_id_0 : u32 = id_1.x + id_1.y * cols_0 / u32(32);
+    var _S1 : u32 = id_1.x;
+    var _S2 : u32 = id_1.y;
+    var _S3 : u32 = _S1 + _S2 * cols_0 / u32(32);
     var i_0 : u32 = u32(0);
     var new_cells_0 : u32 = u32(0);
     for(;;)
@@ -31,13 +33,13 @@ fn compute_shader(@builtin(global_invocation_id) id_0 : vec3<u32>)
             {
                 break;
             }
-            var new_cells_1 : u32 = (new_cells_0 | (((((((in_ssbo_0[flat_id_0] >> ((i_0 + j_0)))) & (u32(1)))) << ((i_0 + (u32(7) - j_0)))))));
+            var new_cells_1 : u32 = (new_cells_0 | (((((((in_ssbo_0[_S3] >> ((i_0 + j_0)))) & (u32(1)))) << ((i_0 + (u32(7) - j_0)))))));
             j_0 = j_0 + u32(1);
             new_cells_0 = new_cells_1;
         }
         i_0 = i_0 + u32(8);
     }
-    out_ssbo_0[flat_id_0] = new_cells_0;
+    out_ssbo_0[_S1 + u32(1) + (_S2 + u32(1)) * (cols_0 / u32(32) + u32(2))] = new_cells_0;
     return;
 }
 
