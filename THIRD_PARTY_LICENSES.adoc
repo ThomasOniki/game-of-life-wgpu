@@ -1,0 +1,3 @@
+The link:https://commons.wikimedia.org/wiki/File:Conways_game_of_life_breeder.png[original image] for MSM breeder was on wikipedia. It was made by the user link:https://commons.wikimedia.org/wiki/User:Hyperdeath[Hyperdeath].
+
+I also used wikipedia as a reference for the link:https://playgameoflife.com/lexicon/Gosper_glider_gun[Gosper glider gun].
