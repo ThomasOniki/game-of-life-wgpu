@@ -1,8 +1,9 @@
 = game-of-life-wgpu
 
-This is an implementation of John Conway's game of life in rust. It uses wgpu compute crate to compute all cells in parallel. There is no editor built-in, but you can load external pbm images.
+This is an implementation of John Conway's game of life in rust. It uses the wgpu crate to compute all cells in parallel. There is no editor built-in, but you can load external pbm images.
 
-video::images/breeder.mp4
+
+video::https://codeberg.org/ThomasOniki/game-of-life-wgpu/raw/branch/main/images/breeder.mp4[]
 
 = Building
 
@@ -13,4 +14,4 @@ cargo build --release
 game-of-life-wgpu <path-to-pbm>
 
 = Credit
-See xref:THIRD_PARTY_LICENSES.adoc[THIRD_PARTY_LICENSES.adoc].
+See link:https://codeberg.org/ThomasOniki/game-of-life-wgpu/src/branch/main/THIRD_PARTY_LICENSES.adoc[THIRD_PARTY_LICENSES.adoc].
