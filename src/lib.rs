@@ -161,7 +161,7 @@ impl Context {
     async fn pick_adapter(instance: &wgpu::Instance) -> wgpu::Adapter {
         let mut best_score = 0u32;
         let mut best_adapter: Option<wgpu::Adapter> = None;
-        let adapters = instance.enumerate_adapters(wgpu::Backends::default()).await;
+        let adapters = instance.enumerate_adapters(wgpu::Backends::PRIMARY).await;
         for adapter in adapters {
             let score = Context::score_adapter(&adapter);
             if score >= best_score {
